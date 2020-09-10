@@ -1,0 +1,2 @@
+# TOAST
+Automatic Ablation Stake
