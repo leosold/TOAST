@@ -51,12 +51,12 @@ def getColor(Phsv, b, vvar):
     # GRY and WHT not implemented!
     h, s, v = Phsv[0], Phsv[1], Phsv[2]
     color = []
-    if 85 <= h <= 149 and s >= 80 and vvar < 20: color.append('blu')
-    if 31 <= h <= 84 and s >= 80 and vvar < 20: color.append('grn')
-    if 11 <= h <= 30 and s >= 80 and vvar < 20: color.append('yel')
-    if (h >= 150 or h <= 10) and s >= 80 and vvar < 20: color.append('red')
-    if 20 <= h <= 90 and s >= 80 and vvar >= 20: color.append('stp')
-    if s <= 60 and v <= b and vvar < 20: color.append('blk')
+    if 85 <= h <= 149 and s >= 95 and vvar < 20: color.append('blu')
+    if 31 <= h <= 84 and s >= 95 and vvar < 20: color.append('grn')
+    if 11 <= h <= 30 and s >= 95 and vvar < 20: color.append('yel')
+    if (h >= 150 or h <= 10) and s >= 95 and vvar < 20: color.append('red')
+    if 20 <= h <= 90 and s >= 95 and vvar >= 20: color.append('stp')
+    if s <= 40 and v <= b and vvar < 20: color.append('blk')
     if not color:
         color.append('na')
     return color
@@ -333,7 +333,7 @@ for file in sorted(os.listdir(folder)):
                                            segmentWidthRange=segmentWidthRange)
 
 # Save results:
-with open('ASDA-results.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
+with open('results.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
     pickle.dump(results, f)
 
 print("Dummy Ende")

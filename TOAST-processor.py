@@ -22,12 +22,12 @@ markerList = ['blu', 'wht', 'red', 'gry', 'blu', 'wht', 'red', 'grn', 'blu', 'wh
 markerListInt = col2int(markerList, colDict)
 
 # Getting back the data:
-with open('ASDA-results.pkl', 'rb') as f:  # Python 3: open(..., 'rb')
+with open('results.pkl', 'rb') as f:  # Python 3: open(..., 'rb')
     results = pickle.load(f)
 
 # drop empty dictionary entries
 for key, value in dict(results).items():
-    # if value is None:
+    if value is None:
         del results[key]
         print("No Data: " + str(key))
 
