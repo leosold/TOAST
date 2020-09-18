@@ -18,7 +18,6 @@ import re
 from datetime import datetime
 import pickle
 
-# from scipy import signal
 
 tapeWidth = 19.  # width of marker tape (mm)
 tapeSpacing = 21.
@@ -284,10 +283,13 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
     chunk = np.ones(len(sI_segments))
     ttt = np.insert(np.abs(np.diff(sI_segments['pxheight'])), 0, 0)
     sss = np.array(sI_segments['pxwidth'])
+    ttt[0] = sss[0]
     for i, t in enumerate(ttt):
         if abs(t - sss[i]) >= 1:
             chunk[i + 1:] += 1
     sI_segments['chunk'] = np.int8(chunk)
+    print('number of chunks: '+str(np.max(chunk)))
+    # print(chunk)
 
     # remove spaces between markers from list (not helpful for matching)
     sI_segments_ret = sI_segments[sI_segmentsColOffset::2]
@@ -322,6 +324,12 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
 
 folder = "./InputImages"
 outfolder = "./OutputImages"
+
+# Clean output directory before writing new images to disk
+filelist = [ f for f in os.listdir(outfolder) if f.endswith(".jpg") ]
+for f in filelist:
+    os.remove(os.path.join(outfolder, f))
+
 results = {}
 for file in sorted(os.listdir(folder)):
     if file.endswith(".jpg"):
