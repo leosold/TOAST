@@ -1,0 +1,12 @@
+name: test_env
+channels:
+  - conda-forge
+dependencies:
+  - pandas
+  - numpy
+  - matplotlib
+  - scipy
+  - pip
+  - pip:
+      - opencv-contrib-python
+      - scikit-image
