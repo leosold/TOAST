@@ -18,13 +18,15 @@ import re
 from datetime import datetime
 import pickle
 
-# from scipy import signal
 
 tapeWidth = 19.  # width of marker tape (mm)
 tapeSpacing = 21.
 armP0, armP1 = (515, 571), (511, 766)  # XY format
 segmentWidthRange = [19, 42]
 
+minBrightness = 100
+maxDegCollin = 5 # maximum angle between points to be comsidered as collinear
+minCollinPoints = 2 # minimum number of collinear points on stake
 
 def angle(p0, p1):
     dx, dy = p1[0] - p0[0], p1[1] - p0[1]
@@ -82,7 +84,6 @@ def cv2label(img, text, pos, fontColor, fontScale, thickness):
 
 def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, armP0=armP0, armP1=armP1,
                   segmentWidthRange=segmentWidthRange):
-    t0 = time.time()
     img = cv2.imread(file)
     img2 = img.copy()  # for overplotting
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -92,7 +93,7 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
     height, width = img.shape[0], img.shape[1]
 
     # First check if image is too dark
-    if np.mean(hsv[:, :, 2]) <= 100:
+    if np.mean(hsv[:, :, 2]) <= minBrightness:
         print(file + " excluded - too dark")
         return
 
@@ -146,9 +147,9 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
     # Find collinear points
     approxStakeSlope = np.median(np.ravel(slopeMatrix)[~np.isnan(np.ravel(slopeMatrix))])
     centerPointsOnStake = centerPoints[np.array(
-        [bool(abs(np.median(pslopes[~np.isnan(pslopes)]) - approxStakeSlope) <= 5) for pslopes in slopeMatrix]), :]
+        [bool(abs(np.median(pslopes[~np.isnan(pslopes)]) - approxStakeSlope) <= maxDegCollin) for pslopes in slopeMatrix]), :]
     # return if not enough collinear points are found
-    if len(centerPointsOnStake) <= 2:
+    if len(centerPointsOnStake) <= minCollinPoints:
         print(file + " excluded - too few collinear points on stake")
         return
 
@@ -284,10 +285,13 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
     chunk = np.ones(len(sI_segments))
     ttt = np.insert(np.abs(np.diff(sI_segments['pxheight'])), 0, 0)
     sss = np.array(sI_segments['pxwidth'])
+    ttt[0] = sss[0]
     for i, t in enumerate(ttt):
         if abs(t - sss[i]) >= 1:
             chunk[i + 1:] += 1
     sI_segments['chunk'] = np.int8(chunk)
+    print('number of chunks: '+str(np.max(chunk)))
+    # print(chunk)
 
     # remove spaces between markers from list (not helpful for matching)
     sI_segments_ret = sI_segments[sI_segmentsColOffset::2]
@@ -322,6 +326,12 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
 
 folder = "./InputImages"
 outfolder = "./OutputImages"
+
+# Clean output directory before writing new images to disk
+filelist = [ f for f in os.listdir(outfolder) if f.endswith(".jpg") ]
+for f in filelist:
+    os.remove(os.path.join(outfolder, f))
+
 results = {}
 for file in sorted(os.listdir(folder)):
     if file.endswith(".jpg"):
