@@ -24,6 +24,9 @@ tapeSpacing = 21.
 armP0, armP1 = (515, 571), (511, 766)  # XY format
 segmentWidthRange = [19, 42]
 
+minBrightness = 100
+maxDegCollin = 5 # maximum angle between points to be comsidered as collinear
+minCollinPoints = 2 # minimum number of collinear points on stake
 
 def angle(p0, p1):
     dx, dy = p1[0] - p0[0], p1[1] - p0[1]
@@ -81,7 +84,6 @@ def cv2label(img, text, pos, fontColor, fontScale, thickness):
 
 def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, armP0=armP0, armP1=armP1,
                   segmentWidthRange=segmentWidthRange):
-    t0 = time.time()
     img = cv2.imread(file)
     img2 = img.copy()  # for overplotting
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -91,7 +93,7 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
     height, width = img.shape[0], img.shape[1]
 
     # First check if image is too dark
-    if np.mean(hsv[:, :, 2]) <= 100:
+    if np.mean(hsv[:, :, 2]) <= minBrightness:
         print(file + " excluded - too dark")
         return
 
@@ -145,9 +147,9 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
     # Find collinear points
     approxStakeSlope = np.median(np.ravel(slopeMatrix)[~np.isnan(np.ravel(slopeMatrix))])
     centerPointsOnStake = centerPoints[np.array(
-        [bool(abs(np.median(pslopes[~np.isnan(pslopes)]) - approxStakeSlope) <= 5) for pslopes in slopeMatrix]), :]
+        [bool(abs(np.median(pslopes[~np.isnan(pslopes)]) - approxStakeSlope) <= maxDegCollin) for pslopes in slopeMatrix]), :]
     # return if not enough collinear points are found
-    if len(centerPointsOnStake) <= 2:
+    if len(centerPointsOnStake) <= minCollinPoints:
         print(file + " excluded - too few collinear points on stake")
         return
 
