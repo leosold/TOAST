@@ -123,7 +123,8 @@ def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, a
         return
 
     # find center points
-    im2, contours, hierarchy = cv2.findContours(res_th, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    contours, hierarchy = cv2.findContours(res_th, cv2.RETR_TREE,
+                                     cv2.CHAIN_APPROX_NONE)
     # centerPoints=list(np.empty(len(contours)))
     centerPoints = []
     # cv2.contourArea(contours)
