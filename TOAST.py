@@ -29,6 +29,17 @@ maxDegCollin = 5 # maximum angle between points to be comsidered as collinear
 minCollinPoints = 2 # minimum number of collinear points on stake
 
 def angle(p0, p1):
+    """
+
+    Parameters
+    ----------
+    p0 :
+    p1 :
+
+    Returns
+    -------
+
+    """
     dx, dy = p1[0] - p0[0], p1[1] - p0[1]
     if dx <= 0:
         dx = abs(dx)
@@ -40,6 +51,29 @@ def angle(p0, p1):
 
 
 def intersection(o0, o1, p0, p1):
+    """
+
+    Parameters
+    ----------
+    o0 :
+    o1 :
+    p0 :
+    p1 :
+
+    Returns
+    -------
+    """
+
+    Parameters
+    ----------
+    Phsv :
+    b :
+    vvar :
+
+    Returns
+    -------
+
+    """
     x1, x2, x3, x4 = o0[1], o1[1], p0[1], p1[1]
     y1, y2, y3, y4 = o0[0], o1[0], p0[0], p1[0]
     px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / (
@@ -48,6 +82,7 @@ def intersection(o0, o1, p0, p1):
                 (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
     return (py, px)
 
+    """
 
 def getColor(Phsv, b, vvar):
     # GRY and WHT not implemented!
@@ -65,6 +100,21 @@ def getColor(Phsv, b, vvar):
 
 
 def cv2label(img, text, pos, fontColor, fontScale, thickness):
+    """
+
+    Parameters
+    ----------
+    img :
+    text :
+    pos :
+    fontcolor :
+    fontscale :
+    thickness :
+
+    Returns
+    -------
+
+    """
     # plot labels on image
     rectangle_bgr = (0, 0, 0)
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -84,6 +134,24 @@ def cv2label(img, text, pos, fontColor, fontScale, thickness):
 
 def analyse_image(file, outfile, tapeWidth=tapeWidth, tapeSpacing=tapeSpacing, armP0=armP0, armP1=armP1,
                   segmentWidthRange=segmentWidthRange):
+    """
+
+
+    Parameters
+    ----------
+    file :
+    outfile :
+    tape_width :
+    tape_spacing :
+    arm_p0 :
+    arm_p1 :
+    segment_width_range :
+
+    Returns
+    -------
+
+    """
+    t0 = time.time()
     img = cv2.imread(file)
     img2 = img.copy()  # for overplotting
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
