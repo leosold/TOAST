@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Aug 17 09:51:56 2020
-
-@author: leosold
-"""
 
 import cv2
 import os
@@ -34,11 +29,12 @@ def angle(p0, p1):
 
     Parameters
     ----------
-    p0 :
-    p1 :
+    p0 : [x, y] coordinates of point P0
+    p1 : [x, y] coordinates of point P1
 
     Returns
     -------
+    slope of line P0P1, converted to range [-90, 90]
 
     """
     dx, dy = p1[0] - p0[0], p1[1] - p0[1]
@@ -56,14 +52,14 @@ def intersection(o0, o1, p0, p1):
 
     Parameters
     ----------
-    o0 :
-    o1 :
-    p0 :
-    p1 :
+    o0 : line o, point 0
+    o1 : line o, point 1
+    p0 : line p, point 0
+    p1 : line p, point 1
 
     Returns
     -------
-
+    intersection coordinates [x, y] of lines o and p
     """
     x1, x2, x3, x4 = o0[1], o1[1], p0[1], p1[1]
     y1, y2, y3, y4 = o0[0], o1[0], p0[0], p1[0]
@@ -79,13 +75,14 @@ def get_color(Phsv, b, vvar):
 
     Parameters
     ----------
-    Phsv :
-    b :
-    vvar :
+    Phsv : color triple HSV
+    b :    "dark" reference brightness 
+    vvar : brightness variability
 
     Returns
     -------
-
+    list of colors that match the input
+    
     """
 
     # todo: GRY and WHT not implemented!
@@ -113,18 +110,18 @@ def cv2label(img, text, pos, fontcolor, fontscale, thickness):
 
     Parameters
     ----------
-    img :
-    text :
-    pos :
-    fontcolor :
-    fontscale :
-    thickness :
+    img :       img to plot label on
+    text :      label text
+    pos :       label [x, y] position
+    fontcolor : (R,G,B) font color
+    fontscale : font scale
+    thickness : font thickness
 
     Returns
     -------
+    img with label
 
     """
-    # plot labels on image
     rectangle_bgr = (0, 0, 0)
     font = cv2.FONT_HERSHEY_SIMPLEX
     # get the width and height of the text box
@@ -150,19 +147,19 @@ def analyse_image(file, outfile, tape_width=tape_width,
                   segment_width_range=segment_width_range):
     """
 
-
     Parameters
     ----------
-    file :
-    outfile :
-    tape_width :
-    tape_spacing :
-    arm_p0 :
-    arm_p1 :
-    segment_width_range :
+    file :          image file
+    outfile :       output image file name
+    tape_width :    width of marker tape
+    tape_spacing :  spacing of tape markers
+    arm_p0 :        [x,y] coordinates of one Point on arm
+    arm_p1 :        [x,y] of other Point on arm (one must be ring)
+    segment_width_range : acceptable width range [min,max] of segments
 
     Returns
     -------
+    dataframe with details for each segment (marker)
 
     """
     t0 = time.time()
