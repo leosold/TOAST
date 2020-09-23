@@ -12,32 +12,18 @@ maxPatternMatch = 5  # maximum number of "good" pattern matches, drop if more
 dAdtRange = [-30, 100]  # allowed change in mm from previous image
 
 
-def int2col(arr, li):
-    """
-
-    Parameters
-    ----------
-    arr :
-    li :
-
-    Returns
-    -------
-
-    """
-    return [li[v] for v in arr]
-
-
 def col2int(arr, li):
     """
 
     Parameters
     ----------
-    arr :
-    dict :
+    arr : list of colors (in this chunk)
+    dict : list of color deifitions
 
     Returns
     -------
-
+    list of integer representations of colors
+    
     """
     # if not isinstance(arr, list):
     #     arr = [arr]
@@ -49,11 +35,12 @@ def score_chunk(chunk, orig):
 
     Parameters
     ----------
-    chunk :
-    orig :
+    chunk : list of colors in this chunk
+    orig : (sub)list of colors on the stake
 
     Returns
     -------
+    number of color matches
 
     """
     score = np.sum(np.array(orig) == np.array(chunk))
