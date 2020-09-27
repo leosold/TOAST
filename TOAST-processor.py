@@ -161,6 +161,10 @@ ii = meas['final'].notna()
 meas = meas[ii]
 print('Dropping '+str(len(ii)-len(meas))+' that were too far off')
 
+# Save results:
+with open('abstich.pkl', 'wb') as f:
+    pickle.dump(meas, f)
+
 # Just the plot
 plt.ylabel('Abstich (mm)')
 for ts in meas.index:
@@ -170,4 +174,5 @@ plt.scatter(meas.index, 'final', data=meas, s=10)
 # plt.xlim(datetime.date(2020, 7, 1),datetime.date(2020, 7, 2))
 plt.gcf().autofmt_xdate()
 plt.show()
-print("t")
+
+print("end.")
