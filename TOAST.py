@@ -5,8 +5,8 @@ import cv2
 import os
 import numpy as np
 import pandas as pd
-from skimage.draw import line
-import matplotlib.pyplot as plt
+# from skimage.draw import line
+# import matplotlib.pyplot as plt
 import math
 import time
 import re
@@ -19,9 +19,9 @@ tape_spacing = 21.
 arm_p0, arm_p1 = (515, 571), (511, 766)  # XY format
 segment_width_range = (19, 42)
 
-minBrightness = 100
-maxDegCollin = 5  # maximum angle between points to be comsidered as collinear
-minCollinPoints = 2  # minimum number of collinear points on stake
+min_brightness = 100
+max_deg_collin = 5  # maximum angle between points to be comsidered as collinear
+min_collin_points = 2  # minimum number of collinear points on stake
 
 
 def angle(p0, p1):
@@ -172,7 +172,7 @@ def analyse_image(file, outfile, tape_width=tape_width,
     height, width = img.shape[0], img.shape[1]
 
     # First check if image is too dark
-    if np.mean(hsv[:, :, 2]) <= minBrightness:
+    if np.mean(hsv[:, :, 2]) <= min_brightness:
         print(file + " excluded - too dark")
         return
 
@@ -232,17 +232,17 @@ def analyse_image(file, outfile, tape_width=tape_width,
         (len(center_points), len(center_points)))
 
     # Find collinear points
-    approxStakeSlope = np.median(np.ravel(slope_matrix)[~np.isnan(np.ravel(slope_matrix))])
-    centerPointsOnStake = center_points[np.array(
-        [bool(abs(np.median(pslopes[~np.isnan(pslopes)]) - approxStakeSlope)
-              <= maxDegCollin) for pslopes in slope_matrix]), :]
+    approx_stake_slope = np.median(np.ravel(slope_matrix)[~np.isnan(np.ravel(slope_matrix))])
+    center_points_on_stake = center_points[np.array(
+        [bool(abs(np.median(pslopes[~np.isnan(pslopes)]) - approx_stake_slope)
+              <= max_deg_collin) for pslopes in slope_matrix]), :]
     # return if not enough collinear points are found
-    if len(centerPointsOnStake) <= minCollinPoints:
+    if len(center_points_on_stake) <= min_collin_points:
         print(file + " excluded - too few collinear points on stake")
         return
 
     # find stake by fittin 2D line through points on stake
-    vx, vy, x, y = cv2.fitLine(centerPointsOnStake, cv2.DIST_L2, 0, 0.01, 0.01)
+    vx, vy, x, y = cv2.fitLine(center_points_on_stake, cv2.DIST_L2, 0, 0.01, 0.01)
     x0, x1 = x - 1000., x + 1000.  # Warning! vx and vy will be used later
     y0, y1 = y - 1000 * vy / vx, y + 1000 * vy / vx
     t, stake_p0, stake_p1 = cv2.clipLine(
@@ -251,18 +251,18 @@ def analyse_image(file, outfile, tape_width=tape_width,
     # cv2.line(img,stakeP0,stakeP1,(0,0,255),2)
 
     if arm_p0[1] < arm_p1[1]:
-        ringMatchPix = arm_p0
+        ring_match_pix = arm_p0
     else:
-        ringMatchPix = arm_p1
+        ring_match_pix = arm_p1
     armLR = [0, 0]
 
     # Find bottom of stake: intersection of stake line and normal projection
     # of ringMatch (normal to arm, projected onto stake line)
-    stakeBottom = intersection(
-        stake_p0, stake_p1, ringMatchPix, (ringMatchPix[0] + 1,
-                                         ringMatchPix[1] -
-                                         (arm_p0[0] - arm_p1[0]) /
-                                         (arm_p0[1] - arm_p1[1])))
+    stake_bottom = intersection(
+        stake_p0, stake_p1, ring_match_pix, (ring_match_pix[0] + 1,
+                                             ring_match_pix[1] -
+                                             (arm_p0[0] - arm_p1[0]) /
+                                             (arm_p0[1] - arm_p1[1])))
 
     # expand stake by 5px to left and right, 4 points clockwise
     rx0, rx1, rx2, rx3 = stake_p0[0] - 20 * vy, stake_p1[0] - 20 * vy, \
@@ -270,64 +270,64 @@ def analyse_image(file, outfile, tape_width=tape_width,
     ry0, ry1, ry2, ry3 = stake_p0[1] + 20 * vx, stake_p1[1] + 20 * vx, \
                          stake_p1[1] - 20 * vx, stake_p0[1] - 20 * vx
 
-    stakeImgLength = math.sqrt((stake_p0[0] - stake_p1[0]) ** 2 +
-                               (stake_p0[1] - stake_p1[1]) ** 2)
+    stake_img_length = math.sqrt((stake_p0[0] - stake_p1[0]) ** 2 +
+                                 (stake_p0[1] - stake_p1[1]) ** 2)
     M = cv2.getAffineTransform(
         np.float32([(rx0, ry0), (rx1, ry1), (rx2, ry2)]),
-        np.float32([(0, 0), (0, stakeImgLength), (40, stakeImgLength)]))
+        np.float32([(0, 0), (0, stake_img_length), (40, stake_img_length)]))
 
     # bilinear interpolation
-    stakeImg = cv2.warpAffine(img, M, (width, height))[0:int(stakeImgLength), 0:40]
-    # plt.imshow(stakeImg)
+    stake_img = cv2.warpAffine(img, M, (width, height))[0:int(stake_img_length), 0:40]
+    # plt.imshow(stake_img)
     # plt.imshow(img)
-    # cv2.imwrite("out.jpg", stakeImg)
+    # cv2.imwrite("out.jpg", stake_img)
 
     # Translate stake bottom point to new coordinates
-    sI_stakeBottom = M.dot(np.array((*stakeBottom, 1)))
+    sI_stakeBottom = M.dot(np.array((*stake_bottom, 1)))
 
     # calculate and sum up edges (laplacian) on s and v image channel,
     # create 1d array with edge peaks
-    stakeImgHSV = cv2.cvtColor(stakeImg, cv2.COLOR_BGR2HSV)
+    stake_img_HSV = cv2.cvtColor(stake_img, cv2.COLOR_BGR2HSV)
 
-    sI_colorKernel = np.array([-1., -1, -1, -1, -1, 0, 1, 1, 1, 1, 1]).reshape((11, 1)) / 11.
-    sI_edgesS = cv2.filter2D(stakeImgHSV[:, :, 1], cv2.CV_32F, sI_colorKernel,
+    sI_color_Kernel = np.array([-1., -1, -1, -1, -1, 0, 1, 1, 1, 1, 1]).reshape((11, 1)) / 11.
+    sI_edgesS = cv2.filter2D(stake_img_HSV[:, :, 1], cv2.CV_32F, sI_color_Kernel,
                              (cv2.BORDER_CONSTANT, 0))
-    sI_edgesV = cv2.filter2D(stakeImgHSV[:, :, 2], cv2.CV_32F, sI_colorKernel,
+    sI_edgesV = cv2.filter2D(stake_img_HSV[:, :, 2], cv2.CV_32F, sI_color_Kernel,
                              (cv2.BORDER_CONSTANT, 0))
 
     # plt.imshow(abs(sI_edgesV))
     # plt.imshow(np.abs(sI_edgesS)+7*np.abs(sI_edgesV))
-    sI_edgesScore = np.mean(np.abs(sI_edgesS) + 7 * np.abs(sI_edgesV), axis=1)
-    # sI_edgesScore = cv2.boxFilter(sI_edgesScore,-1,(1,15))
-    # plt.plot(sI_edgesScore)
+    sI_edges_score = np.mean(np.abs(sI_edgesS) + 7 * np.abs(sI_edgesV), axis=1)
+    # sI_edges_score = cv2.boxFilter(sI_edges_score,-1,(1,15))
+    # plt.plot(sI_edges_score)
 
     # local maxima code
-    temp = np.squeeze(cv2.GaussianBlur(sI_edgesScore, (1, 35), 5)) - \
-           np.squeeze(cv2.GaussianBlur(sI_edgesScore, (1, 55), 15))
+    temp = np.squeeze(cv2.GaussianBlur(sI_edges_score, (1, 35), 5)) - \
+           np.squeeze(cv2.GaussianBlur(sI_edges_score, (1, 55), 15))
     # plt.plot(temp)
     # np.diff(np.sign(np.diff(np.squeeze(cv2.GaussianBlur(kk,(1,35),7))))) == 2
-    sI_edgesPeaks = np.array(np.where(np.diff(np.sign(np.diff(temp))) == -2)) + 1
+    sI_edges_peaks = np.array(np.where(np.diff(np.sign(np.diff(temp))) == -2)) + 1
     # filter out low-contrast-edges
-    sI_edgesPeaks = sI_edgesPeaks[temp[sI_edgesPeaks] >= 10]
-    # plt.scatter(sI_edgesPeaks,np.full(len(sI_edgesPeaks),20))
+    sI_edges_peaks = sI_edges_peaks[temp[sI_edges_peaks] >= 10]
+    # plt.scatter(sI_edges_peaks,np.full(len(sI_edges_peaks),20))
     # plt.clf()
 
     # make 1d array from HSV stake and cut away stake-in-ice part
     # !!! measures switch from from-top to from-bottom
-    sI_stakeImgHSV1d = cv2.resize(stakeImgHSV[:int(sI_stakeBottom[1]), :, :],
-                                  (1, int(stakeImgHSV[:int(sI_stakeBottom[1]), :, :].shape[0])))
-    sI_stakeImgBGR1d = cv2.resize(stakeImg[:int(sI_stakeBottom[1]), :, :],
-                                  (1, int(stakeImg[:int(sI_stakeBottom[1]), :, :].shape[0])))
+    sI_stakeImgHSV1d = cv2.resize(stake_img_HSV[:int(sI_stakeBottom[1]), :, :],
+                                  (1, int(stake_img_HSV[:int(sI_stakeBottom[1]), :, :].shape[0])))
+    sI_stakeImgBGR1d = cv2.resize(stake_img[:int(sI_stakeBottom[1]), :, :],
+                                  (1, int(stake_img[:int(sI_stakeBottom[1]), :, :].shape[0])))
 
-    sI_edgesPeaks = sI_edgesPeaks[sI_edgesPeaks <= sI_stakeBottom[1]]
-    if len(sI_edgesPeaks) <= 2:
+    sI_edges_peaks = sI_edges_peaks[sI_edges_peaks <= sI_stakeBottom[1]]
+    if len(sI_edges_peaks) <= 2:
         print(file + "excluded - too few marker edges found on stake")
         return
     # remove lowest peak if it appx. coincides with lower stake end
     # (shadow problems)
-    if abs(sI_edgesPeaks[-1] - sI_stakeBottom[1]) <= 5: sI_edgesPeaks = \
-        sI_edgesPeaks[:-1]
-    if len(sI_edgesPeaks) <= 2:  # again, maybe point was removes
+    if abs(sI_edges_peaks[-1] - sI_stakeBottom[1]) <= 5: sI_edges_peaks = \
+        sI_edges_peaks[:-1]
+    if len(sI_edges_peaks) <= 2:  # again, maybe point was removes
         print(file + "excluded - too few marker edges found on stake")
         return
 
@@ -340,9 +340,9 @@ def analyse_image(file, outfile, tape_width=tape_width,
     # storage
     sI_segments = pd.DataFrame(columns=['pxheight', 'pxwidth', 'color'])
 
-    for i, segment in enumerate(sI_edgesPeaks[:-1]):
-        # sI_edgesPeaks measure from stake top end
-        temp = [sI_edgesPeaks[i], sI_edgesPeaks[i + 1] - 1]
+    for i, segment in enumerate(sI_edges_peaks[:-1]):
+        # sI_edges_peaks measure from stake top end
+        temp = [sI_edges_peaks[i], sI_edges_peaks[i + 1] - 1]
         Pgrb = np.mean(sI_stakeImgBGR1d[temp[0]:temp[1] + 1, :, :], axis=0)
         Phsv = cv2.cvtColor(np.uint8(np.reshape(Pgrb, (1, 1, 3))),
                             cv2.COLOR_BGR2HSV)
@@ -351,8 +351,8 @@ def analyse_image(file, outfile, tape_width=tape_width,
             *np.percentile(sI_stakeImgHSV1d[temp[0]:temp[1] + 1, :, 2], [75,
                                                                          25]))
         # print(Phsv,vvar)
-        tt = pd.DataFrame([[sI_stakeBottom[1] - sI_edgesPeaks[i + 1],  # pixelheight of lower segment bound from BOTTOM
-                            sI_edgesPeaks[i + 1] - sI_edgesPeaks[i],  # pixel width of segment
+        tt = pd.DataFrame([[sI_stakeBottom[1] - sI_edges_peaks[i + 1],  # pixelheight of lower segment bound from BOTTOM
+                            sI_edges_peaks[i + 1] - sI_edges_peaks[i],  # pixel width of segment
                             get_color(np.ravel(Phsv), sI_baseV, vvar)[0]]],
                           index=[i], columns=['pxheight', 'pxwidth', 'color'])
         sI_segments = sI_segments.append(tt)
@@ -370,17 +370,17 @@ def analyse_image(file, outfile, tape_width=tape_width,
         print(file + " excluded - no colors spotted")
         return
     # check if markers are odd or even segments
-    sI_segmentsCol = np.array(np.squeeze(ii))  # ! streifen aussortieren?
-    sI_segmentsColOffset = sI_segmentsCol.reshape(-1)[0] % 2
+    sI_segments_col = np.array(np.squeeze(ii))  # ! streifen aussortieren?
+    sI_segments_col_offset = sI_segments_col.reshape(-1)[0] % 2
 
     # check if this holds for ALL colored markers (Verzählt?)
-    if not np.all(sI_segmentsCol % 2 == sI_segmentsColOffset):
+    if not np.all(sI_segments_col % 2 == sI_segments_col_offset):
         print(file + " excluded - odd/even pattern interruptet")
         return  # raise Exception('ERROR: segment edtection failed')
 
     # define markers and spacing width
     tt = np.full(len(sI_segments), tape_spacing)
-    tt[sI_segmentsColOffset::2] = tape_width
+    tt[sI_segments_col_offset::2] = tape_width
     sI_segments['mmwidth'] = tt
 
     # GET SCALE: linear (!) regression: vertical midpoints as X, mm-per-px as Y
@@ -388,18 +388,18 @@ def analyse_image(file, outfile, tape_width=tape_width,
                       np.array(sI_segments['pxwidth'], dtype=float) * 0.5,
                       np.array(sI_segments['mmwidth'], dtype=float) /
                       np.array(sI_segments['pxwidth'], dtype=float), 1)
-    sI_scaleFun = np.poly1d(coef)
+    sI_scale_fun = np.poly1d(coef)
 
     # plot(np.array(sI_segments[0])+np.array(sI_segments[1])*0.5,
     # np.array(sI_segments[3])/np.array(sI_segments[1]), 'yo',
     # np.array(sI_segments[0])+np.array(sI_segments[1])*0.5,
-    # sI_scaleFun(np.array(sI_segments[0])+np.array(sI_segments[1])*0.5),
+    # sI_scale_fun(np.array(sI_segments[0])+np.array(sI_segments[1])*0.5),
     # '--k')
 
     # calculate distance of lower marker bounds to lower stake end in mm
     sI_segments['mmheight'] = sI_segments['pxheight'] * \
-                              sI_scaleFun(np.array(sI_segments['pxheight'])
-                                          * 0.5)
+                              sI_scale_fun(np.array(sI_segments['pxheight'])
+                                           * 0.5)
 
     # assign chunk number (if stake is partly hidden by drops on lens)
     chunk = np.ones(len(sI_segments))
@@ -414,23 +414,23 @@ def analyse_image(file, outfile, tape_width=tape_width,
     # print(chunk)
 
     # remove spaces between markers from list (not helpful for matching)
-    sI_segments_ret = sI_segments[sI_segmentsColOffset::2]
+    sI_segments_ret = sI_segments[sI_segments_col_offset::2]
 
     # store coordinates for overplotting and output on img
     # invert transform matrix to map coordinates back on image
     iM = cv2.invertAffineTransform(M)
-    out_edgesPeaks = [iM.dot(np.array([int(stakeImg.shape[1] / 2), y, 1]))
-                      for y in sI_edgesPeaks]
-    for xy in out_edgesPeaks:
+    out_edges_peaks = [iM.dot(np.array([int(stake_img.shape[1] / 2), y, 1]))
+                       for y in sI_edges_peaks]
+    for xy in out_edges_peaks:
         xxyy = tuple(np.int_(np.rint(xy)))
         cv2.circle(img2, xxyy, 3, (255, 0, 0), -1)
     # segments with labels
-    out_segmentsXY = [iM.dot(np.array([int(stakeImg.shape[1]),
-                                       sI_stakeBottom[1] - y, 1])) for y in
-                      sI_segments['pxheight']]
+    out_segments_XY = [iM.dot(np.array([int(stake_img.shape[1]),
+                                        sI_stakeBottom[1] - y, 1])) for y in
+                       sI_segments['pxheight']]
     tt_colors = np.array(sI_segments['color'])
     tt_height = np.array(sI_segments['mmheight'])
-    for i, xy in enumerate(out_segmentsXY):
+    for i, xy in enumerate(out_segments_XY):
         xxyy = tuple(np.int_(np.rint(xy)))
         cv2.line(img2, xxyy, (xxyy[0] + 50, xxyy[1]), (0, 255, 0), 1)
         cv2label(img2, str(tt_colors[i]) + ": " +
@@ -438,8 +438,8 @@ def analyse_image(file, outfile, tape_width=tape_width,
                  "mm", (xxyy[0] + 50, xxyy[1]), (0, 255, 0), 0.5, 1)
     cv2.line(img2, (arm_p0[0] + int(np.mean(armLR)), arm_p0[1]),
              (arm_p1[0] + int(np.mean(armLR)), arm_p1[1]), (0, 255, 0), 1)
-    cv2.circle(img2, ringMatchPix, 3, (0, 0, 255), -1)
-    cv2.circle(img2, tuple(np.int_(np.rint(stakeBottom))), 3, (0, 255, 0), -1)
+    cv2.circle(img2, ring_match_pix, 3, (0, 0, 255), -1)
+    cv2.circle(img2, tuple(np.int_(np.rint(stake_bottom))), 3, (0, 255, 0), -1)
     cv2.imwrite(outfile, img2)
     print(file + " probably     ok")
     return sI_segments_ret

@@ -2,14 +2,13 @@ import numpy as np
 import pandas as pd
 import pickle
 import matplotlib.pyplot as plt
-import datetime
-import matplotlib.dates as mdates
+# import datetime
+# import matplotlib.dates as mdates
 
-tapeWidth = 19.  # width of marker tape (mm)
-tapeSpacing = 21.
+from TOAST import tape_width, tape_spacing
 
-maxPatternMatch = 5  # maximum number of "good" pattern matches, drop if more
-dAdtRange = [-30, 100]  # allowed change in mm from previous image
+max_pattern_match = 5  # maximum number of "good" pattern matches, drop if more
+dAdt_range = [-30, 100]  # allowed change in mm from previous image
 
 
 def col2int(arr, li):
@@ -18,7 +17,7 @@ def col2int(arr, li):
     Parameters
     ----------
     arr : list of colors (in this chunk)
-    dict : list of color deifitions
+    li : list of color definitions
 
     Returns
     -------
@@ -81,7 +80,7 @@ markerList = ['blu', 'wht', 'red', 'gry', 'blu', 'wht', 'red', 'grn', 'blu',
               'stp', 'blk', 'gry', 'yel', 'stp', 'blk', 'grn', 'yel', 'stp',
               'blk']
 
-markerListInt = col2int(markerList, colList)
+marker_list_int = col2int(markerList, colList)
 
 # Getting back the data:
 with open('results.pkl', 'rb') as f:  # Python 3: open(..., 'rb')
@@ -93,33 +92,33 @@ for key, value in dict(results).items():
         del results[key]
         print("No Data: " + str(key))
 
-# step through timestamps/images, stepg through each chunk and put all "good"
+# step through timestamps/images, step through each chunk and put all "good"
 # abstich values into dataframe
-tsList = list(results)
-meas = pd.DataFrame(index=tsList, columns=['abstiche','final'])
+ts_list = list(results)
+meas = pd.DataFrame(index=ts_list, columns=['abstiche', 'final'])
 # Dangerous: results dict must be sorted by key (i.e. timestamp)
 for ts in sorted(results):
     print(ts)
-    resThis = results[ts]
-    resChunks = resThis.groupby('chunk')
+    res_this = results[ts]
+    res_chunks = res_this.groupby('chunk')
     abst = []
-    for chunk, group in resChunks:
+    for chunk, group in res_chunks:
         # print(chunk, group)
         pat = col2int(group['color'], colList)
         N = len(pat)
-        matchArr = np.array(
-            pd.Series(markerListInt).rolling(window=N, min_periods=N).apply(
+        match_arr = np.array(
+            pd.Series(marker_list_int).rolling(window=N, min_periods=N).apply(
                 lambda x: score_chunk(pat, x)))
-        matchArr[0:N-1] = 0
-        matchArr = np.int8(matchArr)
+        match_arr[0:N - 1] = 0
+        match_arr = np.int8(match_arr)
 
         # Get positions of best pattern fitting
-        ii = np.squeeze(np.argwhere(matchArr == np.max(matchArr))).tolist()
+        ii = np.squeeze(np.argwhere(match_arr == np.max(match_arr))).tolist()
         if not isinstance(ii, list):
             ii = [ii]  # if maximum is unique
         for i in ii:
             # Distance of lower end of pattern from stake top PLUS last mmheight
-            abst.append(i * (tapeWidth+tapeSpacing) +
+            abst.append(i * (tape_width + tape_spacing) +
                         group.iloc[-1]['mmheight'])
             # print(i)
         meas.loc[ts, 'abstiche'] = abst
@@ -129,7 +128,7 @@ for ts in sorted(results):
 
 
 # drop if too many "good" matches were found
-ii = [len(a) <= maxPatternMatch for a in meas['abstiche']]
+ii = [len(a) <= max_pattern_match for a in meas['abstiche']]
 meas = meas[ii]
 print('Dropping '+str(len(ii)-len(meas))+' that hat too many pattern matches')
 
@@ -143,7 +142,7 @@ for ts in meas.index:
         # use the abstich value that is closest to the previous one
         closest = this[np.argmin(abs(this-prev))]
         delta = closest-prev
-        if dAdtRange[0] <= delta <= dAdtRange[1]:
+        if dAdt_range[0] <= delta <= dAdt_range[1]:
             res = closest
             keep = res
         else:
@@ -156,7 +155,7 @@ for ts in meas.index:
     meas.loc[ts, 'final'] = res
     prev = keep
 
-# drop NANs (from not in dAdtRange)
+# drop NANs (from not in dAdt_range)
 ii = meas['final'].notna()
 meas = meas[ii]
 print('Dropping '+str(len(ii)-len(meas))+' that were too far off')
