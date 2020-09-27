@@ -1,3 +1,6 @@
+# TOAST output folder
+OutputImages/
+
 # Editors 
 .vscode/
 .idea/
