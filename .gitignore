@@ -1,7 +1,8 @@
 # TOAST output folder
-OutputImages/
+OutputImages/*.jpg
+OutputImages/*.jpeg
 
-# Editors 
+# Editors
 .vscode/
 .idea/
 
