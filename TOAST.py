@@ -157,6 +157,7 @@ def analyse_image(file, outfile, tape_width=tape_width,
     arm_p0 :        [x,y] coordinates of one Point on arm
     arm_p1 :        [x,y] of other Point on arm (one must be ring)
     segment_width_range : acceptable width range [min,max] of segments
+    wb_rect_yyxx :  y and x ranges for whitebalance region
 
     Returns
     -------
