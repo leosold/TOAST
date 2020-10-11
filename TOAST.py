@@ -18,6 +18,7 @@ tape_width = 19.  # width of marker tape (mm)
 tape_spacing = 21.
 arm_p0, arm_p1 = (515, 571), (511, 766)  # XY format
 segment_width_range = (19, 42)
+wb_rect_yyxx = (320, 500, 560, 880)
 
 min_brightness = 100
 max_deg_collin = 5  # maximum angle between points to be comsidered as collinear
@@ -144,7 +145,7 @@ def cv2label(img, text, pos, fontcolor, fontscale, thickness):
 
 def analyse_image(file, outfile, tape_width=tape_width,
                   tape_spacing=tape_spacing, arm_p0=arm_p0, arm_p1=arm_p1,
-                  segment_width_range=segment_width_range):
+                  segment_width_range=segment_width_range, wb_rect_yyxx=wb_rect_yyxx):
     """
 
     Parameters
@@ -164,6 +165,15 @@ def analyse_image(file, outfile, tape_width=tape_width,
     """
     t0 = time.time()
     img = cv2.imread(file)
+
+    # whitebalance: greyworld assumption only in given rectangle
+    img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    avg_a = np.average(img_lab[wb_rect_yyxx[0]:wb_rect_yyxx[1], wb_rect_yyxx[2]:wb_rect_yyxx[3], 1])  # calculate averages for whitebalance
+    avg_b = np.average(img_lab[wb_rect_yyxx[0]:wb_rect_yyxx[1], wb_rect_yyxx[2]:wb_rect_yyxx[3], 2])
+    img_lab[:, :, 1] = img_lab[:, :, 1] - ((avg_a - 128) * (img_lab[:, :, 0] / 255.0) * 1.1)  # substract on LAB color space
+    img_lab[:, :, 2] = img_lab[:, :, 2] - ((avg_b - 128) * (img_lab[:, :, 0] / 255.0) * 1.1)
+    img = cv2.cvtColor(img_lab, cv2.COLOR_LAB2BGR)  # convert back to BGR
+
     img2 = img.copy()  # for overplotting
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -455,12 +465,10 @@ if __name__ == "__main__":
             match = re.search(r'\d{4}-\d{2}-\d{2}_\d{2}-\d{2}', file)
             timestamp = datetime.strptime(match.group(), '%Y-%m-%d_%H-%M')
             # print(timestamp)
-            results[timestamp] = analyse_image(
-                os.path.join(folder, file), os.path.join(outfolder, 'out_' +
-                                                         file),
-                tape_width=tape_width, tape_spacing=tape_spacing,
-                arm_p0=arm_p0, arm_p1=arm_p1,
-                segment_width_range=segment_width_range)
+            results[timestamp] = analyse_image(os.path.join(folder, file), os.path.join(outfolder, 'out_' +
+                                                                                        file), tape_width=tape_width,
+                                               tape_spacing=tape_spacing, arm_p0=arm_p0, arm_p1=arm_p1,
+                                               segment_width_range=segment_width_range)
 
     # Save results:
     with open('results.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
