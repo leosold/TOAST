@@ -95,13 +95,14 @@ for key, value in dict(results).items():
 # step through timestamps/images, step through each chunk and put all "good"
 # abstich values into dataframe
 ts_list = list(results)
-meas = pd.DataFrame(index=ts_list, columns=['abstiche', 'final'])
+meas = pd.DataFrame(index=ts_list, columns=['abstiche', 'err_estimates', 'final', 'err_estimate'])
 # Dangerous: results dict must be sorted by key (i.e. timestamp)
 for ts in sorted(results):
     print(ts)
     res_this = results[ts]
     res_chunks = res_this.groupby('chunk')
     abst = []
+    abst_err = []
     for chunk, group in res_chunks:
         # print(chunk, group)
         pat = col2int(group['color'], colList)
@@ -120,8 +121,15 @@ for ts in sorted(results):
             # Distance of lower end of pattern from stake top PLUS last mmheight
             abst.append(i * (tape_width + tape_spacing) +
                         group.iloc[-1]['mmheight'])
+            if len(group) >= 2:
+                # difference of regression-based segment width from theoretic marker spacing + width
+                abst_err.append(group.iloc[-2]['mmheight']-group.iloc[-1]['mmheight']-(tape_width + tape_spacing))
+            else:
+                abst_err.append(np.nan)
+            # print('mmheight of second last marker ' + str(group.iloc[-2]['mmheight']-group.iloc[-1]['mmheight']))
             # print(i)
         meas.loc[ts, 'abstiche'] = abst
+        meas.loc[ts, 'err_estimates'] = abst_err
         # for this chunk, find pattern in markerList (potentially multiple hits)
         # for every hit in markerlist: compute ABSTICH and store in list
         # per image: multiple chunks, each has multiple ABSTICH values
@@ -138,21 +146,27 @@ print('Dropping '+str(len(ii)-len(meas))+' that hat too many pattern matches')
 prev = None
 for ts in meas.index:
     this = np.array(meas.loc[ts, 'abstiche'])
+    this_err = np.array(meas.loc[ts, 'err_estimates'])
     if prev is not None:
         # use the abstich value that is closest to the previous one
         closest = this[np.argmin(abs(this-prev))]
+        closest_err = this_err[np.argmin(abs(this - prev))]
         delta = closest-prev
         if dAdt_range[0] <= delta <= dAdt_range[1]:
             res = closest
+            res_err = closest_err
             keep = res
         else:
             res = np.nan  # set NAN if difference is too large
+            res_err = np.nan
             keep = prev
     else:
         # Oh Oh: for first image in series the Abstich is just chosen by order
         res = this[0]
+        res_err = this_err[0]
         keep = res
     meas.loc[ts, 'final'] = res
+    meas.loc[ts, 'err_estimate'] = res_err
     prev = keep
 
 # drop NANs (from not in dAdt_range)
@@ -165,6 +179,7 @@ with open('abstich.pkl', 'wb') as f:
     pickle.dump(meas, f)
 
 # Just the plot
+plt.figure(1)
 plt.ylabel('Abstich (mm)')
 for ts in meas.index:
     this = np.array(meas.loc[ts, 'abstiche'])
@@ -173,5 +188,17 @@ plt.scatter(meas.index, 'final', data=meas, s=10)
 # plt.xlim(datetime.date(2020, 7, 1),datetime.date(2020, 7, 2))
 plt.gcf().autofmt_xdate()
 plt.show()
+
+plt.figure(2)
+plt.ylabel('Error estimate (mm)')
+for ts in meas.index:
+    this = np.array(meas.loc[ts, 'err_estimates'])
+    plt.scatter(np.full(len(this), ts), this, s=2)
+plt.scatter(meas.index, 'err_estimate', data=meas, s=10)
+# plt.xlim(datetime.date(2020, 7, 1),datetime.date(2020, 7, 2))
+plt.gcf().autofmt_xdate()
+plt.show()
+
+# Todo: calculate differences over time (differentiate) error estimates because this is what counts
 
 print("end.")
