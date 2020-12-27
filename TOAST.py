@@ -12,6 +12,7 @@ import time
 import re
 from datetime import datetime
 import pickle
+import statsmodels.formula.api as smf
 
 
 tape_width = 19.  # width of marker tape (mm)
@@ -395,12 +396,26 @@ def analyse_image(file, outfile, tape_width=tape_width,
     sI_segments['mmwidth'] = tt
 
     # GET SCALE: linear (!) regression: vertical midpoints as X, mm-per-px as Y
-    coef = np.polyfit(np.array(sI_segments['pxheight']) +
-                      np.array(sI_segments['pxwidth'], dtype=float) * 0.5,
-                      np.array(sI_segments['mmwidth'], dtype=float) /
-                      np.array(sI_segments['pxwidth'], dtype=float), 1)
+    x = np.array(sI_segments['pxheight']) + np.array(sI_segments['pxwidth'], dtype=float) * 0.5
+    y = np.array(sI_segments['mmwidth'], dtype=float) / np.array(sI_segments['pxwidth'], dtype=float)
+
+    coef, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
     sI_scale_fun = np.poly1d(coef)
 
+    ## Preparing for annoying questions on regression stats
+    ## Idea from https://joshualoong.com/2018/10/03/Fitting-Polynomial-Regressions-in-Python/
+    # df = pd.DataFrame(columns=['x','y']) # just for the summary
+    # df['x'] = x
+    # df['y'] = y
+    # sI_scale_fun_summary = smf.ols(formula='y ~ sI_scale_fun(x)', data=df).fit()
+
+    # UNCERTAINTY: https://de.wikipedia.org/wiki/Standardfehler_der_Regression
+    # residuals: sum of squared y deviations: mm-per-px
+    # SQRT of residuals divided by n-2
+    if len(sI_segments) >= 3: # DOF check
+        scale_error = np.sqrt( residuals/(len(x)-2) )
+    else:
+        scale_error = np.nan
     # plot(np.array(sI_segments[0])+np.array(sI_segments[1])*0.5,
     # np.array(sI_segments[3])/np.array(sI_segments[1]), 'yo',
     # np.array(sI_segments[0])+np.array(sI_segments[1])*0.5,
@@ -411,6 +426,9 @@ def analyse_image(file, outfile, tape_width=tape_width,
     sI_segments['mmheight'] = sI_segments['pxheight'] * \
                               sI_scale_fun(np.array(sI_segments['pxheight'])
                                            * 0.5)
+    # store UNCERTAINTY
+    sI_segments['mmheight_scale_error'] = sI_segments['pxheight'] * scale_error
+    print(sI_segments.iloc[-2:-1]['pxheight'] * scale_error)
 
     # assign chunk number (if stake is partly hidden by drops on lens)
     chunk = np.ones(len(sI_segments))
