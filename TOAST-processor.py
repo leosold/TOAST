@@ -95,7 +95,8 @@ for key, value in dict(results).items():
 # step through timestamps/images, step through each chunk and put all "good"
 # abstich values into dataframe
 ts_list = list(results)
-meas = pd.DataFrame(index=ts_list, columns=['abstiche', 'marker_errors', 'scale_errors', 'final', 'marker_error', 'scale_error'])
+meas = pd.DataFrame(index=ts_list, columns=['abstiche', 'marker_errors', 'scale_errors',
+                                            'final', 'marker_error', 'scale_error'])
 # Dangerous: results dict must be sorted by key (i.e. timestamp)
 for ts in sorted(results):
     print(ts)
@@ -121,7 +122,7 @@ for ts in sorted(results):
         for i in ii:
             # i is position number on stake (from top) of lowermost marker of the best fit/s of this chunk
             # Calculate distance of lower end of pattern from stake top PLUS last mmheight
-            abst.append(i * (tape_width + tape_spacing) +
+            abst.append(np.double(i) * (tape_width + tape_spacing) +
                         group.iloc[-1]['mmheight'])
             scale_err.append(group.iloc[-1]['mmheight_scale_error'])
             print(group)
@@ -133,7 +134,8 @@ for ts in sorted(results):
                 # marker_err.append(group.iloc[-2]['mmheight']-group.iloc[-1]['mmheight']-(tape_width + tape_spacing))
 
                 # standard error of all markers in this group
-                marker_err.append(np.sqrt(np.sum((np.diff(-group['mmheight']) - (tape_width + tape_spacing)) ** 2) / len(group)))
+                marker_err.append(np.sqrt(np.sum((np.diff(-group['mmheight'])
+                                                  - (tape_width + tape_spacing)) ** 2) / len(group)))
             else:
                 marker_err.append(np.nan)
             # print('mmheight of second last marker ' + str(group.iloc[-2]['mmheight']-group.iloc[-1]['mmheight']))
