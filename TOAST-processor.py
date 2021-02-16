@@ -151,7 +151,7 @@ for ts in sorted(results):
 # drop if too many "good" matches were found
 ii = [len(a) <= max_pattern_match for a in meas['abstiche']]
 meas = meas[ii]
-print('Dropping '+str(len(ii)-len(meas))+' that hat too many pattern matches')
+print('Dropping '+str(len(ii)-len(meas))+' that has too many pattern matches')
 
 
 # melt down to straight time series

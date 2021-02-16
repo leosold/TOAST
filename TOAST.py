@@ -12,7 +12,7 @@ import time
 import re
 from datetime import datetime
 import pickle
-import statsmodels.formula.api as smf
+# import statsmodels.formula.api as smf
 
 
 tape_width = 19.  # width of marker tape (mm)

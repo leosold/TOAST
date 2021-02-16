@@ -127,3 +127,7 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+*.docx
+Dokumente/Final_report_handed_in_MS_project_Borner_Cremona.pdf
+Dokumente/Portenieretal2020.pdf
+Dokumente/tc-2020-281.pdf
