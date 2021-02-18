@@ -107,6 +107,90 @@ def get_color(Phsv, b, vvar):
     return color
 
 
+def odd_even_score(arr):
+    odd = np.zeros(len(arr), dtype=np.int8)
+    odd[::2] = 1
+    even = np.ones(len(arr), dtype=np.int8)
+    even[::2] = 0
+
+    # The higher the score the more different bits from odd/even
+    odd_score = np.sum(np.abs(arr - odd))
+    even_score = np.sum(np.abs(arr - even))
+
+    return np.min([odd_score, even_score])
+
+
+def get_color_arr(arr):
+    """
+
+    Parameters
+    ----------
+    arr : HSV color array for all segments, 4th value is variability measure
+
+    Returns
+    -------
+    list of colors
+
+    """
+
+    # find saturation threshold that gives the best odd/even-pattern
+    try_sat_thres = range(255, 0, -2)
+    try_sat_score = []
+    for sat in try_sat_thres:
+        ii = arr[:, 1] >= sat
+        try_sat_score.append(odd_even_score(ii))
+    sat_thres = try_sat_thres[np.argmin(try_sat_score)] # returns first occurance
+
+    # find lower brightness threshold (for black) to give even better pattern
+    try_lowval_thres = range(255, 0, -5)
+    try_lowval_score = []
+    for lowval in try_lowval_thres:
+        ii = np.logical_or(arr[:, 2] <= lowval, arr[:, 1] >= sat_thres)
+        try_lowval_score.append(odd_even_score(ii))
+    low_thres = try_lowval_thres[np.argmin(try_lowval_score)]
+
+    # find upper brightness threshold (for white) to give even better pattern
+    try_upval_thres = range(low_thres, 255, 5)
+    try_upval_score = []
+    for upval in try_upval_thres:
+        ii = np.logical_or(arr[:, 2] >= upval,
+                            np.logical_or(arr[:, 2] <= low_thres, arr[:, 1] >= sat_thres))
+        try_upval_score.append(odd_even_score(ii))
+    up_thres = try_upval_thres[np.argmin(try_upval_score)]
+
+    ii = np.logical_or(arr[:, 2] >= up_thres,
+                            np.logical_or(arr[:, 2] <= low_thres, arr[:, 1] >= sat_thres))
+
+    black_sat_thres = np.median(arr[ii, 1]) * 0.5
+    black_val_thres = np.median(arr[~ii, 2]) * 0.5
+
+    # todo: GRY not implemented!
+    col_list = []
+    for a in arr:
+        h, s, v, vvar = a[0], a[1], a[2], a[3]
+        color = 'na'
+        if s > sat_thres or v < low_thres or v > up_thres:
+            if s >= black_sat_thres * 4/3 and black_val_thres <= v <= black_val_thres * 4:
+                if 20 <= h <= 90 and vvar >= 20:
+                    color = 'stp'
+                if vvar < 20:
+                    if 85 <= h <= 149:
+                        color = 'blu'
+                    if 31 <= h <= 84:
+                        color = 'grn'
+                    if 11 <= h <= 30:
+                        color = 'yel'
+                    if (h >= 150 or h <= 10):
+                        color = 'red'
+            if s < black_sat_thres and v > black_val_thres * 4:
+                color = 'wht'
+            if s < black_sat_thres and v < black_val_thres:
+                color = 'blk'
+
+        col_list.append(color)
+    return col_list
+
+
 def cv2label(img, text, pos, fontcolor, fontscale, thickness):
     """
 
@@ -253,7 +337,7 @@ def analyse_image(file, outfile, tape_width=tape_width,
         print(file + " excluded - too few collinear points on stake")
         return
 
-    # find stake by fittin 2D line through points on stake
+    # find stake by fitting 2D line through points on stake
     vx, vy, x, y = cv2.fitLine(center_points_on_stake, cv2.DIST_L2, 0, 0.01, 0.01)
     x0, x1 = x - 1000., x + 1000.  # Warning! vx and vy will be used later
     y0, y1 = y - 1000 * vy / vx, y + 1000 * vy / vx
@@ -276,7 +360,7 @@ def analyse_image(file, outfile, tape_width=tape_width,
                                              (arm_p0[0] - arm_p1[0]) /
                                              (arm_p0[1] - arm_p1[1])))
 
-    # expand stake by 5px to left and right, 4 points clockwise
+    # expand stake by 20px to left and right, 4 points clockwise
     rx0, rx1, rx2, rx3 = stake_p0[0] - 20 * vy, stake_p1[0] - 20 * vy, \
                          stake_p1[0] + 20 * vy, stake_p0[0] + 20 * vy
     ry0, ry1, ry2, ry3 = stake_p0[1] + 20 * vx, stake_p1[1] + 20 * vx, \
@@ -297,10 +381,10 @@ def analyse_image(file, outfile, tape_width=tape_width,
     # Translate stake bottom point to new coordinates
     sI_stakeBottom = M.dot(np.array((*stake_bottom, 1)))
 
-    # calculate and sum up edges (laplacian) on s and v image channel,
-    # create 1d array with edge peaks
+    # convert to HSV
     stake_img_HSV = cv2.cvtColor(stake_img, cv2.COLOR_BGR2HSV)
 
+    # calculate and sum up edges (laplacian) on s and v image channel,
     sI_color_Kernel = np.array([-1., -1, -1, -1, -1, 0, 1, 1, 1, 1, 1]).reshape((11, 1)) / 11.
     sI_edgesS = cv2.filter2D(stake_img_HSV[:, :, 1], cv2.CV_32F, sI_color_Kernel,
                              (cv2.BORDER_CONSTANT, 0))
@@ -324,6 +408,14 @@ def analyse_image(file, outfile, tape_width=tape_width,
     # plt.scatter(sI_edges_peaks,np.full(len(sI_edges_peaks),20))
     # plt.clf()
 
+    # Standardize S and V channels
+    s_val = np.max(stake_img_HSV[:int(sI_stakeBottom[1]), :, 1])
+    # s_val = np.percentile(stake_img_HSV[:int(sI_stakeBottom[1]), :, 1], 80)
+    v_val = np.percentile(stake_img_HSV[:int(sI_stakeBottom[1]), :, 2], 50)
+    stake_img_HSV[:, :, 1] = np.clip(stake_img_HSV[:, :, 1] / s_val * 255, 0, 255).astype(int)
+    stake_img_HSV[:, :, 2] = np.clip(stake_img_HSV[:, :, 2] / v_val * 150, 0, 255).astype(int)
+    cv2.imwrite(os.path.join(outfolder, 'stake_'+os.path.basename(file)), cv2.cvtColor(stake_img_HSV,cv2.COLOR_HSV2BGR))
+
     # make 1d array from HSV stake and cut away stake-in-ice part
     # !!! measures switch from from-top to from-bottom
     sI_stakeImgHSV1d = cv2.resize(stake_img_HSV[:int(sI_stakeBottom[1]), :, :],
@@ -339,40 +431,61 @@ def analyse_image(file, outfile, tape_width=tape_width,
     # (shadow problems)
     if abs(sI_edges_peaks[-1] - sI_stakeBottom[1]) <= 5: sI_edges_peaks = \
         sI_edges_peaks[:-1]
-    if len(sI_edges_peaks) <= 2:  # again, maybe point was removes
+    if len(sI_edges_peaks) <= 2:  # again, because maybe a point was removed
         print(file + "excluded - too few marker edges found on stake")
         return
 
-    # print(file)
-    # if file == "./InputImages/2020-06-19_10-04.jpg":
-    #     print(" ")
+    # # dark base-brightness for black-detection
+    # sI_baseV = np.percentile(sI_stakeImgHSV1d[:, :, 2], 25)
+    # # storage
+    # sI_segments = pd.DataFrame(columns=['pxheight', 'pxwidth', 'color'])
+    #
+    # for i, segment in enumerate(sI_edges_peaks[:-1]):
+    #     # sI_edges_peaks measure from stake top end
+    #     temp = [sI_edges_peaks[i], sI_edges_peaks[i + 1] - 1]
+    #     Pgrb = np.mean(sI_stakeImgBGR1d[temp[0]:temp[1] + 1, :, :], axis=0)
+    #     Phsv = cv2.cvtColor(np.uint8(np.reshape(Pgrb, (1, 1, 3))),
+    #                         cv2.COLOR_BGR2HSV)
+    #     # Brightness IQR as robust variability measure
+    #     vvar = np.subtract(
+    #         *np.percentile(sI_stakeImgHSV1d[temp[0]:temp[1] + 1, :, 2], [75,
+    #                                                                      25]))
+    #     # print(Phsv,vvar)
+    #     tt = pd.DataFrame([[sI_stakeBottom[1] - sI_edges_peaks[i + 1],  # pixelheight of lower segment bound from BOTTOM
+    #                         sI_edges_peaks[i + 1] - sI_edges_peaks[i],  # pixel width of segment
+    #                         get_color(np.ravel(Phsv), sI_baseV, vvar)[0]]],
+    #                       index=[i], columns=['pxheight', 'pxwidth', 'color'])
+    #     sI_segments = sI_segments.append(tt)
 
-    # dark base-brightness for black-detection
-    sI_baseV = np.percentile(sI_stakeImgHSV1d[:, :, 2], 25)
-    # storage
+    # new color detection
     sI_segments = pd.DataFrame(columns=['pxheight', 'pxwidth', 'color'])
-
+    sI_segments_hsvV = np.zeros((len(sI_edges_peaks[:-1]),4), dtype=np.uint8)
     for i, segment in enumerate(sI_edges_peaks[:-1]):
         # sI_edges_peaks measure from stake top end
         temp = [sI_edges_peaks[i], sI_edges_peaks[i + 1] - 1]
-        Pgrb = np.mean(sI_stakeImgBGR1d[temp[0]:temp[1] + 1, :, :], axis=0)
-        Phsv = cv2.cvtColor(np.uint8(np.reshape(Pgrb, (1, 1, 3))),
-                            cv2.COLOR_BGR2HSV)
+        sI_segments_hsvV[i,0:3] = cv2.cvtColor(
+            np.array(np.mean(sI_stakeImgBGR1d[temp[0]:temp[1] + 1, :, :], axis=0),
+                     ndmin=3, dtype=np.uint8),cv2.COLOR_BGR2HSV)
+
+
         # Brightness IQR as robust variability measure
-        vvar = np.subtract(
-            *np.percentile(sI_stakeImgHSV1d[temp[0]:temp[1] + 1, :, 2], [75,
-                                                                         25]))
-        # print(Phsv,vvar)
+        sI_segments_hsvV[i,3] = np.subtract(
+            *np.percentile(sI_stakeImgHSV1d[temp[0]:temp[1] + 1, :, 2], [75, 25]))
+
         tt = pd.DataFrame([[sI_stakeBottom[1] - sI_edges_peaks[i + 1],  # pixelheight of lower segment bound from BOTTOM
-                            sI_edges_peaks[i + 1] - sI_edges_peaks[i],  # pixel width of segment
-                            get_color(np.ravel(Phsv), sI_baseV, vvar)[0]]],
-                          index=[i], columns=['pxheight', 'pxwidth', 'color'])
+                            sI_edges_peaks[i + 1] - sI_edges_peaks[i]]],  # px width of segment
+                            index=[i], columns=['pxheight', 'pxwidth'])
         sI_segments = sI_segments.append(tt)
 
+    # color recognition
+    sI_segments['color'] = get_color_arr(sI_segments_hsvV)
+
     # Remove segments that are too thin or too wide
+    # DANGEROUS - is this a good place to sort them out?
     sI_segments = sI_segments[
         (sI_segments['pxwidth'] >= segment_width_range[0]) &
         (sI_segments['pxwidth'] <= segment_width_range[1])]
+
     # plt.scatter(sI_segments[0][0::2], sI_segments[1][0::2])
 
     # find out which segments are actually markers
@@ -382,10 +495,10 @@ def analyse_image(file, outfile, tape_width=tape_width,
         print(file + " excluded - no colors spotted")
         return
     # check if markers are odd or even segments
-    sI_segments_col = np.array(np.squeeze(ii))  # ! streifen aussortieren?
+    sI_segments_col = np.array(np.squeeze(ii))
     sI_segments_col_offset = sI_segments_col.reshape(-1)[0] % 2
 
-    # check if this holds for ALL colored markers (Verzählt?)
+    # check if this holds for ALL colored markers ("Verzählt?")
     if not np.all(sI_segments_col % 2 == sI_segments_col_offset):
         print(file + " excluded - odd/even pattern interruptet")
         return  # raise Exception('ERROR: segment edtection failed')
