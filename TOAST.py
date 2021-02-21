@@ -458,7 +458,7 @@ def analyse_image(file, outfile, tape_width=tape_width,
     #     sI_segments = sI_segments.append(tt)
 
     # new color detection
-    sI_segments = pd.DataFrame(columns=['pxheight', 'pxwidth', 'color'])
+    sI_segments = pd.DataFrame(columns=['pxheight', 'pxwidth', 'color', 'mmwidth'])
     sI_segments_hsvV = np.zeros((len(sI_edges_peaks[:-1]),4), dtype=np.uint8)
     for i, segment in enumerate(sI_edges_peaks[:-1]):
         # sI_edges_peaks measure from stake top end
@@ -486,64 +486,7 @@ def analyse_image(file, outfile, tape_width=tape_width,
         (sI_segments['pxwidth'] >= segment_width_range[0]) &
         (sI_segments['pxwidth'] <= segment_width_range[1])]
 
-    # plt.scatter(sI_segments[0][0::2], sI_segments[1][0::2])
-
-    # find out which segments are actually markers
-    ii = np.where(sI_segments['color'] != 'na')
-    # check if colors were  found
-    if np.squeeze(ii).size == 0:
-        print(file + " excluded - no colors spotted")
-        return
-    # check if markers are odd or even segments
-    sI_segments_col = np.array(np.squeeze(ii))
-    sI_segments_col_offset = sI_segments_col.reshape(-1)[0] % 2
-
-    # check if this holds for ALL colored markers ("Verzählt?")
-    if not np.all(sI_segments_col % 2 == sI_segments_col_offset):
-        print(file + " excluded - odd/even pattern interruptet")
-        return  # raise Exception('ERROR: segment edtection failed')
-
-    # define markers and spacing width
-    tt = np.full(len(sI_segments), tape_spacing)
-    tt[sI_segments_col_offset::2] = tape_width
-    sI_segments['mmwidth'] = tt
-
-    # GET SCALE: linear (!) regression: vertical midpoints as X, mm-per-px as Y
-    x = np.array(sI_segments['pxheight']) + np.array(sI_segments['pxwidth'], dtype=float) * 0.5
-    y = np.array(sI_segments['mmwidth'], dtype=float) / np.array(sI_segments['pxwidth'], dtype=float)
-
-    coef, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
-    sI_scale_fun = np.poly1d(coef)
-
-    ## Preparing for annoying questions on regression stats
-    ## Idea from https://joshualoong.com/2018/10/03/Fitting-Polynomial-Regressions-in-Python/
-    # df = pd.DataFrame(columns=['x','y']) # just for the summary
-    # df['x'] = x
-    # df['y'] = y
-    # sI_scale_fun_summary = smf.ols(formula='y ~ sI_scale_fun(x)', data=df).fit()
-
-    # UNCERTAINTY: https://de.wikipedia.org/wiki/Standardfehler_der_Regression
-    # residuals: sum of squared y deviations: mm-per-px
-    # SQRT of residuals divided by n-2
-    if len(sI_segments) >= 3: # DOF check
-        scale_error = np.sqrt( residuals/(len(x)-2) )
-    else:
-        scale_error = np.nan
-    # plot(np.array(sI_segments[0])+np.array(sI_segments[1])*0.5,
-    # np.array(sI_segments[3])/np.array(sI_segments[1]), 'yo',
-    # np.array(sI_segments[0])+np.array(sI_segments[1])*0.5,
-    # sI_scale_fun(np.array(sI_segments[0])+np.array(sI_segments[1])*0.5),
-    # '--k')
-
-    # calculate distance of lower marker bounds to lower stake end in mm
-    sI_segments['mmheight'] = sI_segments['pxheight'] * \
-                              sI_scale_fun(np.array(sI_segments['pxheight'])
-                                           * 0.5)
-    # store UNCERTAINTY
-    sI_segments['mmheight_scale_error'] = sI_segments['pxheight'] * scale_error
-    print(sI_segments.iloc[-2:-1]['pxheight'] * scale_error)
-
-    # assign chunk number (if stake is partly hidden by drops on lens)
+    # get and assign chunk number (if stake is partly hidden by drops on lens)
     chunk = np.ones(len(sI_segments))
     ttt = np.insert(np.abs(np.diff(sI_segments['pxheight'])), 0, 0)
     sss = np.array(sI_segments['pxwidth'])
@@ -552,38 +495,105 @@ def analyse_image(file, outfile, tape_width=tape_width,
         if abs(t - sss[i]) >= 1:
             chunk[i + 1:] += 1
     sI_segments['chunk'] = np.int8(chunk)
-    print('number of chunks: '+str(np.max(chunk)))
+    print('number of chunks: ' + str(np.max(chunk)))
     # print(chunk)
 
-    # remove spaces between markers from list (not helpful for matching)
-    sI_segments_ret = sI_segments[sI_segments_col_offset::2]
+    # plt.scatter(sI_segments[0][0::2], sI_segments[1][0::2])
 
-    # store coordinates for overplotting and output on img
-    # invert transform matrix to map coordinates back on image
-    iM = cv2.invertAffineTransform(M)
-    out_edges_peaks = [iM.dot(np.array([int(stake_img.shape[1] / 2), y, 1]))
-                       for y in sI_edges_peaks]
-    for xy in out_edges_peaks:
-        xxyy = tuple(np.int_(np.rint(xy)))
-        cv2.circle(img2, xxyy, 3, (255, 0, 0), -1)
-    # segments with labels
-    out_segments_XY = [iM.dot(np.array([int(stake_img.shape[1]),
-                                        sI_stakeBottom[1] - y, 1])) for y in
-                       sI_segments['pxheight']]
-    tt_colors = np.array(sI_segments['color'])
-    tt_height = np.array(sI_segments['mmheight'])
-    for i, xy in enumerate(out_segments_XY):
-        xxyy = tuple(np.int_(np.rint(xy)))
-        cv2.line(img2, xxyy, (xxyy[0] + 50, xxyy[1]), (0, 255, 0), 1)
-        cv2label(img2, str(tt_colors[i]) + ": " +
-                 str(np.format_float_positional(tt_height[i], precision=1)) +
-                 "mm", (xxyy[0] + 50, xxyy[1]), (0, 255, 0), 0.5, 1)
-    cv2.line(img2, (arm_p0[0] + int(np.mean(armLR)), arm_p0[1]),
-             (arm_p1[0] + int(np.mean(armLR)), arm_p1[1]), (0, 255, 0), 1)
-    cv2.circle(img2, ring_match_pix, 3, (0, 0, 255), -1)
-    cv2.circle(img2, tuple(np.int_(np.rint(stake_bottom))), 3, (0, 255, 0), -1)
-    cv2.imwrite(outfile, img2)
-    print(file + " probably     ok")
+    # Step through chunks and do calculations separately
+    sI_segments_ret = []
+    for name, group in sI_segments.groupby('chunk'):
+
+        # find out which segments are actually markers
+        ii = np.where(group['color'] != 'na')
+        # check if colors were  found
+        if np.squeeze(ii).size == 0:
+            print(file + "chunk excluded - no colors spotted")
+            continue  # with next chunk
+        # check if markers are odd or even segments
+        group_col = np.array(np.squeeze(ii))
+        group_col_offset = group_col.reshape(-1)[0] % 2
+
+        # check if this holds for ALL colored markers ("Verzählt?")
+        if not np.all(group_col % 2 == group_col_offset):
+            print(file + " chunk excluded - odd/even pattern interruptet")
+            continue  # with next chunk because segment detection failed
+
+        # define markers and spacing width
+        tt = np.full(len(group), tape_spacing)
+        tt[group_col_offset::2] = tape_width
+        group['mmwidth'] = tt
+
+        # GET SCALE: linear (!) regression: vertical midpoints as X, mm-per-px as Y
+        x = np.array(group['pxheight']) + np.array(group['pxwidth'], dtype=float) * 0.5
+        y = np.array(group['mmwidth'], dtype=float) / np.array(group['pxwidth'], dtype=float)
+
+        coef, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
+        sI_scale_fun = np.poly1d(coef)
+
+        ## Preparing for annoying questions on regression stats
+        ## Idea from https://joshualoong.com/2018/10/03/Fitting-Polynomial-Regressions-in-Python/
+        # df = pd.DataFrame(columns=['x','y']) # just for the summary
+        # df['x'] = x
+        # df['y'] = y
+        # sI_scale_fun_summary = smf.ols(formula='y ~ sI_scale_fun(x)', data=df).fit()
+
+        # UNCERTAINTY: https://de.wikipedia.org/wiki/Standardfehler_der_Regression
+        # residuals: sum of squared y deviations: mm-per-px
+        # SQRT of residuals divided by n-2
+        if len(group) >= 3: # DOF check
+            scale_error = np.sqrt( residuals/(len(x)-2) )
+        else:
+            scale_error = np.nan
+        # plot(np.array(sI_segments[0])+np.array(sI_segments[1])*0.5,
+        # np.array(sI_segments[3])/np.array(sI_segments[1]), 'yo',
+        # np.array(sI_segments[0])+np.array(sI_segments[1])*0.5,
+        # sI_scale_fun(np.array(sI_segments[0])+np.array(sI_segments[1])*0.5),
+        # '--k')
+
+        # calculate distance of lower marker bounds to lower stake end in mm
+        group['mmheight'] = group['pxheight'] * \
+                                  sI_scale_fun(np.array(group['pxheight'])
+                                               * 0.5)
+        # store UNCERTAINTY
+        group['mmheight_scale_error'] = group['pxheight'] * scale_error
+        print(group.iloc[-2:-1]['pxheight'] * scale_error)
+
+        # remove spaces between markers from list (not helpful for matching)
+        group = group[group_col_offset::2]
+        sI_segments_ret.append(group)
+
+    if len(sI_segments_ret) == 0:
+        return  # no good chunk found
+    sI_segments_ret = pd.concat(sI_segments_ret).reset_index(drop=True)
+
+    # # store coordinates for overplotting and output on img
+    # # invert transform matrix to map coordinates back on image
+    # iM = cv2.invertAffineTransform(M)
+    # out_edges_peaks = [iM.dot(np.array([int(stake_img.shape[1] / 2), y, 1]))
+    #                    for y in sI_edges_peaks]
+    # for xy in out_edges_peaks:
+    #     xxyy = tuple(np.int_(np.rint(xy)))
+    #     cv2.circle(img2, xxyy, 3, (255, 0, 0), -1)
+    # # segments with labels
+    # out_segments_XY = [iM.dot(np.array([int(stake_img.shape[1]),
+    #                                     sI_stakeBottom[1] - y, 1])) for y in
+    #                    sI_segments['pxheight']]
+    # tt_colors = np.array(sI_segments['color'])
+    # tt_height = np.array(sI_segments['mmheight'])
+    # for i, xy in enumerate(out_segments_XY):
+    #     xxyy = tuple(np.int_(np.rint(xy)))
+    #     cv2.line(img2, xxyy, (xxyy[0] + 50, xxyy[1]), (0, 255, 0), 1)
+    #     cv2label(img2, str(tt_colors[i]) + ": " +
+    #              str(np.format_float_positional(tt_height[i], precision=1)) +
+    #              "mm", (xxyy[0] + 50, xxyy[1]), (0, 255, 0), 0.5, 1)
+    # cv2.line(img2, (arm_p0[0] + int(np.mean(armLR)), arm_p0[1]),
+    #          (arm_p1[0] + int(np.mean(armLR)), arm_p1[1]), (0, 255, 0), 1)
+    # cv2.circle(img2, ring_match_pix, 3, (0, 0, 255), -1)
+    # cv2.circle(img2, tuple(np.int_(np.rint(stake_bottom))), 3, (0, 255, 0), -1)
+    # cv2.imwrite(outfile, img2)
+    # print(file + " probably     ok")
+
     return sI_segments_ret
 
 
