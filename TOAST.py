@@ -603,7 +603,7 @@ if __name__ == "__main__":
     # filter by date and time as desired
     file_filter = [
         (file_dates > datetime(2020, 6, 30, 11, 5)) &
-        (file_dates < datetime(2020, 8, 1, 11, 5)) &
+        (file_dates < datetime(2020, 7, 2, 11, 5)) &
         (np.array([np.abs(12 - f.hour) for f in file_dates]) >= 4)
         # (np.array([f.month for f in file_dates]) == 7) &
         # (np.array([f.day for f in file_dates]) <= 3)
