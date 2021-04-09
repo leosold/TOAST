@@ -1,11 +1,15 @@
 import numpy as np
 import pandas as pd
 import pickle
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from scipy.stats import binom, norm
+import datetime
 # import matplotlib.dates as mdates
 
 from TOAST import tape_width, tape_spacing
+
+# max_pattern_match = 5  # maximum number of "good" pattern matches, drop if more
+# dAdt_range = [-30, 100]  # allowed change in mm from previous image
 
 
 def col2int(arr, li):
@@ -96,7 +100,7 @@ meas = pd.DataFrame(index=ts_list, columns=['abstiche', 'match_qual', 'marker_er
                                             'final', 'marker_error', 'scale_error'])
 # Dangerous: results dict must be sorted by key (i.e. timestamp)
 for ts in sorted(results):
-    # print(ts)
+    print(ts)
     res_this = results[ts]
     res_chunks = res_this.groupby('chunk')
     abst = []
@@ -114,9 +118,11 @@ for ts in sorted(results):
         match_arr = np.int8(match_arr)
 
         # keep 10 best with val ge 3
-        ii = np.ravel(np.argwhere(match_arr >= 3))  # np.squeeze(np.argwhere(match_arr >= 3)).tolist()
+        ii = np.squeeze(np.argwhere(match_arr >= 3)).tolist()
         n = min(len(ii), 10)
         ii = np.array(ii)[np.argpartition(match_arr[ii], -n)[-n:]]
+        # # # Get positions of best pattern fitting
+        # # ii = np.squeeze(np.argwhere(match_arr == np.max(match_arr))).tolist()
 
         if len(ii) == 0:
             continue  # jump to next chunk
@@ -134,7 +140,9 @@ for ts in sorted(results):
             # number of matched colors and number of segments
             match_qual.append([match_arr[i], len(group)])
 
+            print(group)
             if len(group) >= 2:
+
                 # difference of regression-based segment width from theoretic marker spacing + width
 
                 # # only for the bottom marker
@@ -145,56 +153,71 @@ for ts in sorted(results):
                                                   - (tape_width + tape_spacing)) ** 2) / len(group)))
             else:
                 marker_err.append(np.nan)
-
+            # print('mmheight of second last marker ' + str(group.iloc[-2]['mmheight']-group.iloc[-1]['mmheight']))
+            # print(i)
     meas.loc[ts, 'abstiche'] = abst
     meas.loc[ts, 'match_qual'] = match_qual
     meas.loc[ts, 'marker_errors'] = marker_err
     meas.loc[ts, 'scale_errors'] = scale_err
 
+
+
 # drop if nothing found
 ii = [len(a) >= 1 for a in meas['abstiche']]
-print('Dropping ' + str(len(ii) - np.count_nonzero(ii)) + ' with no abstich values defined:')
-print(meas.index[~np.array(ii)])
 meas = meas[ii]
+print('Dropping '+str(len(ii)-len(meas))+' that have too many pattern matches')
+
 
 # melt down to straight time series
 # pick best choice in abstich
 prev = None
 for index, row in meas.iterrows():
     this = np.array(row['abstiche'])
+    # this_marker_err = np.array(row['marker_errors'])
+    # this_scale_err = np.array(row['scale_errors'])
 
     # https://stats.stackexchange.com/questions/85676/ratio-that-accounts-for-different-sample-sizes
     # n / np.sqrt(N) # the larger the better
 
     # Probability to match less than this number of markers
-    P_colmatch = 1 - binom.cdf(np.array(row['match_qual'])[:, 0],
-                               np.array(row['match_qual'])[:, 1],
-                               0.8)  # binomial distribution, smaller ist better
+    P_colmatch = 1-binom.cdf(np.array(row['match_qual'])[:,0],
+                           np.array(row['match_qual'])[:,1],
+                           0.8)  # binomial distribution, smaller ist better
     if prev is not None:
 
         # Probability for change in Abstich
         unit_mu, unit_sigma = 100., 100.  # daily values (estimates)
-        delta_t = (index - prev_index).total_seconds() / 60 / 60 / 24  # days
-        P_abstmatch = np.abs((norm.cdf(+(this - prev - unit_mu * delta_t),
+        delta_t = (index - prev_index).total_seconds()/60/60/24 # days
+        P_abstmatch = np.abs((norm.cdf(+(this-prev-unit_mu*delta_t),
                                        0,
-                                       np.sqrt(unit_sigma ** 2 * delta_t)) -
-                              norm.cdf(-(this - prev - unit_mu * delta_t),
+                                       np.sqrt(unit_sigma**2*delta_t)) -
+                              norm.cdf(-(this-prev-unit_mu*delta_t),
                                        0,
-                                       np.sqrt(unit_sigma ** 2 * delta_t))))
+                                       np.sqrt(unit_sigma**2*delta_t))) )
 
         # find best
-        P = P_colmatch * P_abstmatch  # what about nasty dependence of variables?
-        i_best = np.argmin(P)  # index!
+        P = P_colmatch * P_abstmatch # what about nasty dependence of variables?
+        i_best = np.argmin(P) # index!
 
+        # # use the abstich value that is closest to the previous one
+        # closest = this[np.argmin(abs(this-prev))]
+        # closest_marker_err = this_marker_err[np.argmin(abs(this - prev))]
+        # closest_scale_err = this_scale_err[np.argmin(abs(this - prev))]
+        # delta = closest-prev
         if P[i_best] <= 0.5:
             meas.loc[index, 'final'] = row['abstiche'][i_best]
             meas.loc[index, 'marker_error'] = row['marker_errors'][i_best]
             meas.loc[index, 'scale_error'] = row['scale_errors'][i_best]
 
+            # res = closest
+            # res_marker_err = closest_marker_err
+            # res_scale_err = closest_scale_err
             keep = row['abstiche'][i_best]
             keep_index = index
-
         else:
+            # res = np.nan  # set NAN if difference is too large
+            # res_marker_err = np.nan
+            # res_scale_err = np.nan
             meas.loc[index, 'final'] = np.nan
             meas.loc[index, 'marker_error'] = np.nan
             meas.loc[index, 'scale_error'] = np.nan
@@ -208,6 +231,9 @@ for index, row in meas.iterrows():
         meas.loc[index, 'marker_error'] = row['marker_errors'][i_best]
         meas.loc[index, 'scale_error'] = row['scale_errors'][i_best]
 
+        # res = this[0]
+        # res_marker_err = this_marker_err[0]
+        # res_scale_err = this_scale_err[0]
         keep = row['abstiche'][i_best]
         keep_index = index
 
@@ -216,12 +242,44 @@ for index, row in meas.iterrows():
 
 # drop NANs (from not in dAdt_range)
 ii = meas['final'].notna()
-print('Dropping ' + str(len(ii) - np.count_nonzero(ii)) + ' that are too far off:')
-print(meas.index[~np.array(ii)])
 meas = meas[ii]
+print('Dropping '+str(len(ii)-len(meas))+' that were too far off')
 
 # Save results:
 with open('abstich.pkl', 'wb') as f:
     pickle.dump(meas, f)
+
+# Just the plot
+plt.figure(1)
+plt.ylabel('Abstich (mm)')
+for ts in meas.index:
+    this = np.array(meas.loc[ts, 'abstiche'])
+    plt.scatter(np.full(len(this), ts), this, s=2)
+plt.scatter(meas.index, 'final', data=meas, s=10)
+# plt.xlim(datetime.date(2020, 7, 1),datetime.date(2020, 7, 2))
+plt.gcf().autofmt_xdate()
+plt.show()
+
+plt.figure(2)
+plt.ylabel('Error estimate (mm)')
+for ts in meas.index:
+    this = np.array(meas.loc[ts, 'marker_errors'])
+    plt.scatter(np.full(len(this), ts), this, s=2)
+plt.scatter(meas.index, 'marker_error', data=meas, s=10)
+# plt.xlim(datetime.date(2020, 7, 1),datetime.date(2020, 7, 2))
+plt.gcf().autofmt_xdate()
+plt.show()
+
+plt.figure(3)
+plt.ylabel('Error estimate (mm)')
+for ts in meas.index:
+    this = np.array(meas.loc[ts, 'scale_errors'])
+    plt.scatter(np.full(len(this), ts), this, s=2)
+plt.scatter(meas.index, 'scale_error', data=meas, s=10)
+# plt.xlim(datetime.date(2020, 7, 1),datetime.date(2020, 7, 2))
+plt.gcf().autofmt_xdate()
+plt.show()
+
+# Todo: calculate differences over time (differentiate) error estimates because this is what counts
 
 print("end.")
