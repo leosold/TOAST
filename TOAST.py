@@ -515,7 +515,7 @@ def analyse_image(file, outfolder, tape_width=tape_width,
         example_out = {}
         for v in ["coef", "residuals", "x", "y", "sI_scale_fun", "file", "group", "Rsq"]:
             example_out[v] = eval(v)
-        with open('example.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
+        with open('oneday-example.pkl', 'wb') as f:  # Python 3: open(..., 'wb')
             pickle.dump(example_out, f)
 
         # Regression stats

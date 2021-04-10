@@ -16,7 +16,7 @@ with open('results.pkl', 'rb') as f:
     results = pickle.load(f)
 with open('abstich.pkl', 'rb') as f:
     meas = pickle.load(f)
-with open('example.pkl', 'rb') as f:
+with open('oneday-example.pkl', 'rb') as f:
     example = pickle.load(f)
 
 # Generate time series of daily values
@@ -53,7 +53,7 @@ ax.errorbar(x=data.index,
             data=data,
             ecolor="gray")  # ecolor=colors,
 plt.ylabel("Visible stake length (mm)")
-plt.savefig("plt_abstich_singleday.png")
+plt.savefig("OutputFiles/plt_abstich_singleday.png")
 
 data = meas.convert_dtypes()
 data['hour'] = data.index.hour + data.index.minute / 60.
@@ -66,7 +66,7 @@ for name, data in data_g:
                  alpha=0.3)
 plt.ylabel("Cumulative ablation (mm)")
 plt.xlabel("Hour")
-plt.savefig("plt_abstich_day-overplot.png")
+plt.savefig("OutputFiles/plt_abstich_day-overplot.png")
 
 data = meas.convert_dtypes()
 fig, ax = plt.subplots(figsize=(8, 8. / 1.62), constrained_layout=True, sharex=True)
@@ -77,7 +77,7 @@ sns.lineplot(x=data.index,
              marker="",
              data=data)
 plt.ylabel("Visible stake length (mm)")
-plt.savefig("plt_abstich_fullperiod.png")
+plt.savefig("OutputFiles/plt_abstich_fullperiod.png")
 
 fig, ax = plt.subplots(figsize=(8, 4), constrained_layout=True, sharex=True)
 date_form = mdates.ConciseDateFormatter("%m-%d")
@@ -88,7 +88,7 @@ ax.bar(meas_day.index,
        0.8,
        yerr=meas_day['err_day'])
 plt.ylabel("Ablation (mm w.e.)")
-plt.savefig("plt_melt.png")
+plt.savefig("OutputFiles/plt_melt.png")
 
 # regression: vertical midpoints as X, mm-per-px as Y
 fig, ax = plt.subplots(figsize=(4, 4), constrained_layout=True, sharex=True)
@@ -104,4 +104,4 @@ plt.text(max(example['x']), max(example['y']) - 0.02, str("R² = {:.2f}".format(
          horizontalalignment='right', size='medium', color='black', weight='semibold')
 plt.ylabel("mm-per-px (mm/px)")
 plt.xlabel("Distance from bottom (px)")
-plt.savefig("plt_regExmple.png")
+plt.savefig("OutputFiles/plt_regExmple.png")
