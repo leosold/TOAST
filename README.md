@@ -1,5 +1,6 @@
-# TOAST
-AU**TO**MATIC **A**BLATION **ST**AKE
+# TOAST   ![IMG_0528](https://user-images.githubusercontent.com/55797835/115372690-721f0280-a1cb-11eb-99d8-bc323f6e6d4c.PNG)
+
+au**TO**matic ice **A**blation **ST**ake readings using camera images
 
 * TOAST.py - load images and analyze
 * TOAST-processor.py - melt down to a time series
